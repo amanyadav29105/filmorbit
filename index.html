@@ -1,0 +1,76 @@
+<script>
+const TMDB_KEY = "7aeb28da55dc62f473190b7f88a2acc8";
+const BASE = "https://api.themoviedb.org/3";
+const IMG = "https://image.tmdb.org/t/p/w500";
+
+let trendingMovies = [];
+let bannerIndex = 0;
+
+const modal = document.getElementById("modal");
+
+// Fetch movie details (ONLY TMDB)
+function fetchDetails(movieId) {
+    modal.style.display = "block";
+    modal.innerHTML = '<div class="loading">Loading...</div>';
+
+    Promise.all([
+        fetch(`${BASE}/movie/${movieId}?api_key=${TMDB_KEY}`).then(r => r.json()),
+        fetch(`${BASE}/movie/${movieId}/videos?api_key=${TMDB_KEY}`).then(r => r.json()),
+        fetch(`${BASE}/movie/${movieId}/similar?api_key=${TMDB_KEY}`).then(r => r.json()),
+        fetch(`${BASE}/movie/${movieId}/credits?api_key=${TMDB_KEY}`).then(r => r.json()),
+        fetch(`${BASE}/movie/${movieId}/images?api_key=${TMDB_KEY}`).then(r => r.json())
+    ])
+    .then(([tmdbData, videosData, similarData, creditsData, imagesData]) => {
+
+        const trailer = videosData.results.find(v => v.type === "Trailer");
+
+        const poster = tmdbData.poster_path ? IMG + tmdbData.poster_path : "";
+        const rating = tmdbData.vote_average?.toFixed(1) || "N/A";
+
+        // Cast
+        const castHTML = creditsData.cast.slice(0, 10).map(actor => `
+            <div class="cast-card">
+                <img src="${actor.profile_path ? IMG + actor.profile_path : ''}">
+                <p>${actor.name}</p>
+            </div>
+        `).join("");
+
+        // Similar
+        const similarHTML = similarData.results.slice(0, 10).map(m => `
+            <div class="similar-item" onclick="fetchDetails(${m.id})">
+                <img src="${m.poster_path ? IMG + m.poster_path : ''}">
+                <p>${m.title}</p>
+            </div>
+        `).join("");
+
+        // Gallery
+        const galleryHTML = imagesData.backdrops.slice(0, 8).map(img =>
+            `<img src="https://image.tmdb.org/t/p/w780${img.file_path}">`
+        ).join("");
+
+        modal.innerHTML = `
+        <div class="modal-content">
+            <div class="modal-header">
+                <h1>${tmdbData.title}</h1>
+                <button onclick="goHome()">Close</button>
+            </div>
+
+            <p>⭐ Rating: ${rating}/10</p>
+            <p>📅 Release: ${tmdbData.release_date}</p>
+            <p>${tmdbData.overview}</p>
+
+            ${trailer ? `<button onclick="window.open('https://youtube.com/watch?v=${trailer.key}')">Watch Trailer</button>` : ""}
+
+            <h3>Cast</h3>
+            <div class="cast-container">${castHTML}</div>
+
+            <h3>Similar</h3>
+            <div class="similar-container">${similarHTML}</div>
+
+            <h3>Gallery</h3>
+            <div class="gallery-container">${galleryHTML}</div>
+        </div>
+        `;
+    });
+}
+</script>
