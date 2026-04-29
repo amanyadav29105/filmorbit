@@ -3,53 +3,48 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FilmOrbit - TMDB Only</title>
+<title>FilmOrbit - OMDb</title>
 
 <style>
 body{
     margin:0;
     font-family:Arial;
-    background:#141414;
-    color:white;
+    background:#111;
+    color:#fff;
 }
 
 /* Navbar */
 .navbar{
     display:flex;
     justify-content:space-between;
-    padding:10px;
-    background:black;
+    padding:12px;
+    background:#000;
 }
-.logo{color:#e50914;font-size:22px;font-weight:bold;}
+.logo{
+    color:#e50914;
+    font-size:22px;
+    font-weight:bold;
+}
 input{
     padding:8px;
     border:none;
     border-radius:4px;
 }
 
-/* Movies Row */
-.row{
-    display:flex;
-    overflow-x:auto;
-    padding:10px;
-    gap:10px;
+/* Grid */
+.container{
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(150px,1fr));
+    gap:12px;
+    padding:12px;
 }
+
 .movie{
-    width:150px;
     cursor:pointer;
 }
 .movie img{
     width:100%;
     border-radius:6px;
-}
-
-/* Banner */
-.banner{
-    height:300px;
-    display:flex;
-    align-items:end;
-    padding:20px;
-    background-size:cover;
 }
 
 /* Modal */
@@ -59,7 +54,7 @@ input{
     left:0;
     width:100%;
     height:100%;
-    background:black;
+    background:#000;
     display:none;
     overflow:auto;
     padding:20px;
@@ -78,105 +73,64 @@ button{
 
 <div class="navbar">
     <div class="logo">FilmOrbit</div>
-    <input id="search" placeholder="Search...">
+    <input id="search" placeholder="Search movies...">
 </div>
 
-<div id="banner" class="banner"></div>
-
-<h2>Trending</h2>
-<div id="trending" class="row"></div>
-
-<h2>Popular</h2>
-<div id="popular" class="row"></div>
-
-<h2>Top Rated</h2>
-<div id="top" class="row"></div>
+<div id="movies" class="container"></div>
 
 <div id="modal"></div>
 
 <script>
-const API="https://api.themoviedb.org/3";
-const KEY="466f6ec156d5fdcd6a7345d4ae483add";
-const IMG="https://image.tmdb.org/t/p/w500";
+const KEY="72bd5552"; // your OMDb key
 
-let trending=[];
+// Search movies
+document.getElementById("search").addEventListener("input",function(){
+    let q=this.value;
+    if(q.length<2) return;
 
-// Load Movies
-function load(){
-    fetch(`${API}/trending/movie/week?api_key=${KEY}`)
+    fetch(`https://www.omdbapi.com/?apikey=${KEY}&s=${q}`)
     .then(r=>r.json())
-    .then(d=>{
-        trending=d.results;
-        show(d.results,"trending");
-        banner();
+    .then(data=>{
+        const container=document.getElementById("movies");
+        container.innerHTML="";
+
+        if(data.Search){
+            data.Search.forEach(m=>{
+                const div=document.createElement("div");
+                div.className="movie";
+                div.innerHTML=`
+                    <img src="${m.Poster}">
+                    <p>${m.Title}</p>
+                `;
+                div.onclick=()=>details(m.imdbID);
+                container.appendChild(div);
+            });
+        }
     });
+});
 
-    fetch(`${API}/movie/popular?api_key=${KEY}`)
-    .then(r=>r.json())
-    .then(d=>show(d.results,"popular"));
-
-    fetch(`${API}/movie/top_rated?api_key=${KEY}`)
-    .then(r=>r.json())
-    .then(d=>show(d.results,"top"));
-}
-
-// Display Movies
-function show(list,id){
-    const el=document.getElementById(id);
-    el.innerHTML="";
-    list.forEach(m=>{
-        const div=document.createElement("div");
-        div.className="movie";
-        div.innerHTML=`
-            <img src="${IMG+m.poster_path}">
-            <p>${m.title}</p>
-        `;
-        div.onclick=()=>details(m.id);
-        el.appendChild(div);
-    });
-}
-
-// Banner
-let i=0;
-function banner(){
-    const b=document.getElementById("banner");
-    setInterval(()=>{
-        let m=trending[i];
-        b.style.backgroundImage=`url(${IMG+m.backdrop_path})`;
-        b.innerHTML=`<h1>${m.title}</h1>`;
-        b.onclick=()=>details(m.id);
-        i=(i+1)%trending.length;
-    },4000);
-}
-
-// Details Modal (TMDB only)
+// Movie details
 function details(id){
     const modal=document.getElementById("modal");
     modal.style.display="block";
     modal.innerHTML="Loading...";
 
-    Promise.all([
-        fetch(`${API}/movie/${id}?api_key=${KEY}`).then(r=>r.json()),
-        fetch(`${API}/movie/${id}/videos?api_key=${KEY}`).then(r=>r.json()),
-        fetch(`${API}/movie/${id}/credits?api_key=${KEY}`).then(r=>r.json())
-    ])
-    .then(([m,v,c])=>{
-
-        const trailer=v.results.find(x=>x.type==="Trailer");
-
-        const cast=c.cast.slice(0,6).map(a=>`<p>${a.name}</p>`).join("");
-
+    fetch(`https://www.omdbapi.com/?apikey=${KEY}&i=${id}`)
+    .then(r=>r.json())
+    .then(m=>{
         modal.innerHTML=`
         <button onclick="closeModal()">Close</button>
-        <h1>${m.title}</h1>
-        <img src="${IMG+m.poster_path}" width="200">
-        <p>⭐ ${m.vote_average}/10</p>
-        <p>${m.overview}</p>
+        <h1>${m.Title}</h1>
+        <img src="${m.Poster}" width="200">
 
-        ${trailer ? `<button onclick="window.open('https://youtube.com/watch?v=${trailer.key}')">Trailer</button>` : ""}
+        <p>⭐ IMDb: ${m.imdbRating}</p>
+        <p>🍅 Rotten Tomatoes: ${
+            m.Ratings.find(r=>r.Source==="Rotten Tomatoes")?.Value || "N/A"
+        }</p>
 
-        <h3>Cast</h3>
-        ${cast}
+        <p>📅 ${m.Year}</p>
+        <p>🎭 ${m.Actors}</p>
+        <p>${m.Plot}</p>
         `;
     });
 }
@@ -184,19 +138,6 @@ function details(id){
 function closeModal(){
     document.getElementById("modal").style.display="none";
 }
-
-// Search
-document.getElementById("search").addEventListener("input",function(){
-    let q=this.value;
-    if(q.length<2) return;
-
-    fetch(`${API}/search/movie?api_key=${KEY}&query=${q}`)
-    .then(r=>r.json())
-    .then(d=>show(d.results,"trending"));
-});
-
-// Init
-load();
 </script>
 
 </body>
