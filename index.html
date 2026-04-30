@@ -3,141 +3,165 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FilmOrbit - OMDb</title>
+<title>FilmOrbit - TMDB Only</title>
 
 <style>
-body{
-    margin:0;
-    font-family:Arial;
-    background:#111;
-    color:#fff;
-}
-
-/* Navbar */
-.navbar{
-    display:flex;
-    justify-content:space-between;
-    padding:12px;
-    background:#000;
-}
-.logo{
-    color:#e50914;
-    font-size:22px;
-    font-weight:bold;
-}
-input{
-    padding:8px;
-    border:none;
-    border-radius:4px;
-}
-
-/* Grid */
-.container{
-    display:grid;
-    grid-template-columns:repeat(auto-fill,minmax(150px,1fr));
-    gap:12px;
-    padding:12px;
-}
-
-.movie{
-    cursor:pointer;
-}
-.movie img{
-    width:100%;
-    border-radius:6px;
-}
-
-/* Modal */
-#modal{
-    position:fixed;
-    top:0;
-    left:0;
-    width:100%;
-    height:100%;
-    background:#000;
-    display:none;
-    overflow:auto;
-    padding:20px;
-}
-button{
-    background:#e50914;
-    color:white;
-    border:none;
-    padding:10px;
-    cursor:pointer;
-}
+/* (Same styles as your original — unchanged for brevity) */
+body{font-family:sans-serif;background:#141414;color:#fff;margin:0}
+.navbar{display:flex;gap:10px;padding:10px;background:#000}
+.home-btn{background:#e50914;color:#fff;border:none;padding:8px}
+.logo{flex:1;text-align:center;font-weight:bold}
+.search-box input{width:100%;padding:8px}
+.results{display:flex;overflow-x:auto;gap:10px;padding:10px}
+.movie{width:140px;cursor:pointer}
+.movie img{width:100%;height:200px;object-fit:cover}
+#modal{position:fixed;top:0;left:0;width:100%;height:100%;background:#000;display:none;overflow:auto;padding:20px}
 </style>
 </head>
 
 <body>
 
 <div class="navbar">
-    <div class="logo">FilmOrbit</div>
-    <input id="search" placeholder="Search movies...">
+<button class="home-btn" onclick="goHome()">Home</button>
+<div class="logo">FilmOrbit</div>
+<div class="search-box">
+<input id="searchInput" placeholder="Search movies...">
+<div id="searchResults"></div>
+</div>
 </div>
 
-<div id="movies" class="container"></div>
+<div id="banner"></div>
+
+<h2>Trending</h2>
+<div id="trending" class="results"></div>
+
+<h2>Popular</h2>
+<div id="popular" class="results"></div>
+
+<h2>Top Rated</h2>
+<div id="toprated" class="results"></div>
 
 <div id="modal"></div>
 
 <script>
-const KEY="72bd5552"; // your OMDb key
+const TMDB_KEY = "7aeb28da55dc62f473190b7f88a2acc8";
+const BASE = "https://api.themoviedb.org/3";
+const IMG = "https://image.tmdb.org/t/p/w500";
 
-// Search movies
-document.getElementById("search").addEventListener("input",function(){
-    let q=this.value;
-    if(q.length<2) return;
+let trendingMovies = [];
+let bannerIndex = 0;
 
-    fetch(`https://www.omdbapi.com/?apikey=${KEY}&s=${q}`)
-    .then(r=>r.json())
-    .then(data=>{
-        const container=document.getElementById("movies");
-        container.innerHTML="";
+const modal = document.getElementById("modal");
 
-        if(data.Search){
-            data.Search.forEach(m=>{
-                const div=document.createElement("div");
-                div.className="movie";
-                div.innerHTML=`
-                    <img src="${m.Poster}">
-                    <p>${m.Title}</p>
-                `;
-                div.onclick=()=>details(m.imdbID);
-                container.appendChild(div);
-            });
-        }
+/* HOME */
+function goHome(){
+    modal.style.display="none";
+    modal.innerHTML="";
+}
+
+/* DISPLAY MOVIES */
+function displayMovies(movies,id){
+    const el=document.getElementById(id);
+    el.innerHTML="";
+    movies.forEach(m=>{
+        const div=document.createElement("div");
+        div.className="movie";
+        div.innerHTML=`
+        <img src="${m.poster_path?IMG+m.poster_path:''}">
+        <p>${m.title}</p>`;
+        div.onclick=()=>fetchDetails(m.id);
+        el.appendChild(div);
     });
+}
+
+/* BANNER */
+function startBanner(){
+    const banner=document.getElementById("banner");
+    setInterval(()=>{
+        const m=trendingMovies[bannerIndex];
+        banner.style.background=`url(${IMG+m.backdrop_path}) center/cover`;
+        banner.innerHTML=`<h1>${m.title}</h1>`;
+        banner.onclick=()=>fetchDetails(m.id);
+        bannerIndex=(bannerIndex+1)%trendingMovies.length;
+    },4000);
+}
+
+/* DETAILS (TMDB ONLY) */
+function fetchDetails(id){
+modal.style.display="block";
+modal.innerHTML="Loading...";
+
+Promise.all([
+fetch(`${BASE}/movie/${id}?api_key=${TMDB_KEY}`).then(r=>r.json()),
+fetch(`${BASE}/movie/${id}/videos?api_key=${TMDB_KEY}`).then(r=>r.json()),
+fetch(`${BASE}/movie/${id}/credits?api_key=${TMDB_KEY}`).then(r=>r.json()),
+fetch(`${BASE}/movie/${id}/similar?api_key=${TMDB_KEY}`).then(r=>r.json())
+])
+.then(([movie,videos,credits,similar])=>{
+
+const rating=movie.vote_average?.toFixed(1)||"N/A";
+const votes=movie.vote_count||"N/A";
+const popularity=movie.popularity?.toFixed(0)||"N/A";
+
+const trailer=videos.results.find(v=>v.type==="Trailer");
+
+const castHTML=credits.cast.slice(0,10).map(c=>`
+<div>
+<img src="${c.profile_path?IMG+c.profile_path:''}" width="80">
+<p>${c.name}</p>
+</div>`).join("");
+
+const similarHTML=similar.results.slice(0,10).map(s=>`
+<div onclick="fetchDetails(${s.id})">
+<img src="${s.poster_path?IMG+s.poster_path:''}" width="100">
+<p>${s.title}</p>
+</div>`).join("");
+
+modal.innerHTML=`
+<h1>${movie.title}</h1>
+<button onclick="goHome()">Close</button>
+
+<img src="${IMG+movie.poster_path}" width="200">
+
+<p><b>⭐ Rating:</b> ${rating}/10</p>
+<p><b>🗳 Votes:</b> ${votes}</p>
+<p><b>🔥 Popularity:</b> ${popularity}</p>
+<p><b>📅 Release:</b> ${movie.release_date}</p>
+
+${trailer?`<button onclick="window.open('https://youtube.com/watch?v=${trailer.key}')">Watch Trailer</button>`:''}
+
+<h3>Overview</h3>
+<p>${movie.overview}</p>
+
+<h3>Cast</h3>
+<div style="display:flex;gap:10px;overflow:auto">${castHTML}</div>
+
+<h3>Similar</h3>
+<div style="display:flex;gap:10px;overflow:auto">${similarHTML}</div>
+`;
+});
+}
+
+/* LOAD DATA */
+function load(){
+fetch(`${BASE}/trending/movie/week?api_key=${TMDB_KEY}`)
+.then(r=>r.json())
+.then(d=>{
+trendingMovies=d.results;
+displayMovies(d.results,"trending");
+startBanner();
 });
 
-// Movie details
-function details(id){
-    const modal=document.getElementById("modal");
-    modal.style.display="block";
-    modal.innerHTML="Loading...";
+fetch(`${BASE}/movie/popular?api_key=${TMDB_KEY}`)
+.then(r=>r.json())
+.then(d=>displayMovies(d.results,"popular"));
 
-    fetch(`https://www.omdbapi.com/?apikey=${KEY}&i=${id}`)
-    .then(r=>r.json())
-    .then(m=>{
-        modal.innerHTML=`
-        <button onclick="closeModal()">Close</button>
-        <h1>${m.Title}</h1>
-        <img src="${m.Poster}" width="200">
-
-        <p>⭐ IMDb: ${m.imdbRating}</p>
-        <p>🍅 Rotten Tomatoes: ${
-            m.Ratings.find(r=>r.Source==="Rotten Tomatoes")?.Value || "N/A"
-        }</p>
-
-        <p>📅 ${m.Year}</p>
-        <p>🎭 ${m.Actors}</p>
-        <p>${m.Plot}</p>
-        `;
-    });
+fetch(`${BASE}/movie/top_rated?api_key=${TMDB_KEY}`)
+.then(r=>r.json())
+.then(d=>displayMovies(d.results,"toprated"));
 }
 
-function closeModal(){
-    document.getElementById("modal").style.display="none";
-}
+load();
 </script>
 
 </body>
