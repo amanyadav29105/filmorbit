@@ -3,28 +3,38 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FilmOrbit - OMDb Enhanced</title>
+<title>FilmOrbit</title>
 
 <style>
 body{margin:0;font-family:sans-serif;background:#141414;color:#fff}
-.navbar{display:flex;gap:10px;padding:10px;background:#000}
-.logo{flex:1;text-align:center;color:#e50914;font-weight:bold}
-input{padding:8px;width:100%}
+.navbar{display:flex;gap:10px;padding:10px;background:#000;align-items:center}
+.logo{color:#e50914;font-weight:bold;font-size:20px}
+input,select{padding:8px}
+.row{display:flex;overflow-x:auto;gap:10px;padding:10px;scroll-behavior:smooth}
+.movie{width:140px;cursor:pointer;transition:.3s}
+.movie:hover{transform:scale(1.08)}
+.movie img{width:100%;height:200px;object-fit:cover;border-radius:5px}
 h2{padding:10px}
-.row{display:flex;overflow-x:auto;gap:10px;padding:10px}
-.movie{width:140px;cursor:pointer}
-.movie img{width:100%;height:200px;object-fit:cover}
 #modal{position:fixed;top:0;left:0;width:100%;height:100%;background:#000;display:none;overflow:auto;padding:20px}
-button{background:#e50914;color:#fff;border:none;padding:8px;cursor:pointer}
+button{background:#e50914;color:#fff;border:none;padding:8px;margin:5px;cursor:pointer}
+.watchlist{position:fixed;bottom:10px;right:10px;background:#222;padding:10px;border-radius:5px}
 </style>
 </head>
 
 <body>
 
 <div class="navbar">
-<div class="logo">FilmOrbit</div>
-<input id="search" placeholder="Search movies...">
+  <div class="logo">FilmOrbit</div>
+  <button onclick="goHome()">🏠 Home</button>
+  <input id="search" placeholder="Search movies...">
 </div>
+
+<!-- SEARCH RESULTS -->
+<h2 id="resultsTitle" style="display:none;">🔎 Results</h2>
+<div id="results" class="row"></div>
+
+<!-- MAIN CONTENT -->
+<div id="mainContent">
 
 <h2>🔥 Trending</h2>
 <div id="trending" class="row"></div>
@@ -35,41 +45,33 @@ button{background:#e50914;color:#fff;border:none;padding:8px;cursor:pointer}
 <h2>🏆 Top Rated</h2>
 <div id="top" class="row"></div>
 
-<h2>🔎 Search Results</h2>
-<div id="results" class="row"></div>
+</div>
 
 <div id="modal"></div>
 
+<div class="watchlist">
+<button onclick="showWatchlist()">❤️ Watchlist</button>
+</div>
+
 <script>
 const API="https://www.omdbapi.com/?apikey=72bd5552";
-
 const modal=document.getElementById("modal");
 
-/* CURATED LISTS (IMDb IDs) */
-const trendingIDs=[
-"tt15398776","tt9362722","tt1745960","tt0816692","tt0468569"
-];
-
-const popularIDs=[
-"tt4154796","tt0848228","tt1375666","tt0133093","tt0109830"
-];
-
-const topIDs=[
-"tt0111161","tt0068646","tt0071562","tt0468569","tt0050083"
-];
+const trendingIDs=["tt15398776","tt9362722","tt1745960","tt0816692","tt0468569"];
+const popularIDs=["tt4154796","tt0848228","tt1375666","tt0133093","tt0109830"];
+const topIDs=["tt0111161","tt0068646","tt0071562","tt0468569","tt0050083"];
 
 /* LOAD ROW */
 function loadRow(ids,container){
 const el=document.getElementById(container);
+el.innerHTML="";
 ids.forEach(id=>{
 fetch(API+"&i="+id)
 .then(r=>r.json())
 .then(m=>{
 const div=document.createElement("div");
 div.className="movie";
-div.innerHTML=`
-<img src="${m.Poster}">
-<p>${m.Title}</p>`;
+div.innerHTML=`<img src="${m.Poster}"><p>${m.Title}</p>`;
 div.onclick=()=>showDetails(id);
 el.appendChild(div);
 });
@@ -77,53 +79,115 @@ el.appendChild(div);
 }
 
 /* SEARCH */
+let timer;
 document.getElementById("search").addEventListener("input",e=>{
-const q=e.target.value.trim();
-if(q.length<2)return;
+clearTimeout(timer);
+timer=setTimeout(()=>searchMovies(e.target.value),400);
+});
+
+function searchMovies(q){
+const res=document.getElementById("results");
+const main=document.getElementById("mainContent");
+const title=document.getElementById("resultsTitle");
+
+if(q.length<2){
+goHome();
+return;
+}
+
+main.style.display="none";
+title.style.display="block";
+res.innerHTML="";
 
 fetch(API+"&s="+q)
 .then(r=>r.json())
 .then(d=>{
-const res=document.getElementById("results");
-res.innerHTML="";
 if(d.Search){
 d.Search.forEach(m=>{
 const div=document.createElement("div");
 div.className="movie";
-div.innerHTML=`
-<img src="${m.Poster}">
-<p>${m.Title}</p>`;
+div.innerHTML=`<img src="${m.Poster}"><p>${m.Title}</p>`;
 div.onclick=()=>showDetails(m.imdbID);
 res.appendChild(div);
 });
+}else{
+res.innerHTML="<p>No results found</p>";
 }
 });
+}
+
+/* HOME BUTTON */
+function goHome(){
+document.getElementById("search").value="";
+document.getElementById("results").innerHTML="";
+document.getElementById("resultsTitle").style.display="none";
+document.getElementById("mainContent").style.display="block";
+}
+
+/* WATCHLIST */
+function addToWatchlist(movie){
+let list=JSON.parse(localStorage.getItem("watchlist"))||[];
+if(!list.find(i=>i.imdbID===movie.imdbID)){
+list.push(movie);
+localStorage.setItem("watchlist",JSON.stringify(list));
+alert("Added to Watchlist!");
+}else{
+alert("Already in Watchlist");
+}
+}
+
+function showWatchlist(){
+let list=JSON.parse(localStorage.getItem("watchlist"))||[];
+modal.style.display="block";
+modal.innerHTML="<h2>Your Watchlist</h2><button onclick='closeModal()'>Close</button>";
+
+if(list.length===0){
+modal.innerHTML+="<p>No movies added</p>";
+return;
+}
+
+list.forEach(m=>{
+modal.innerHTML+=`
+<p>
+${m.Title} 
+<button onclick="removeFromWatchlist('${m.imdbID}')">❌</button>
+</p>`;
 });
+}
+
+function removeFromWatchlist(id){
+let list=JSON.parse(localStorage.getItem("watchlist"))||[];
+list=list.filter(m=>m.imdbID!==id);
+localStorage.setItem("watchlist",JSON.stringify(list));
+showWatchlist();
+}
 
 /* DETAILS */
 function showDetails(id){
 modal.style.display="block";
-modal.innerHTML="Loading...";
+modal.innerHTML="";
 
 fetch(API+"&i="+id)
 .then(r=>r.json())
 .then(m=>{
 
+const stars="⭐".repeat(Math.round(m.imdbRating/2));
+
 modal.innerHTML=`
 <h1>${m.Title}</h1>
-<button onclick="modal.style.display='none'">Close</button>
+<button onclick="closeModal()">Close</button>
+<button onclick='addToWatchlist(${JSON.stringify(m)})'>❤️ Watchlist</button>
+
+<br><br>
 
 <img src="${m.Poster}" width="200">
 
-<p><b>⭐ IMDb:</b> ${m.imdbRating}</p>
-<p><b>🍅 Rotten Tomatoes:</b> ${
-(m.Ratings.find(r=>r.Source==="Rotten Tomatoes")||{}).Value || "N/A"
-}</p>
-
-<p><b>📅 Year:</b> ${m.Year}</p>
-<p><b>🎬 Genre:</b> ${m.Genre}</p>
-<p><b>🎭 Actors:</b> ${m.Actors}</p>
-<p><b>🎥 Director:</b> ${m.Director}</p>
+<p><b>Rating:</b> ${stars} (${m.imdbRating})</p>
+<p><b>Box Office:</b> ${m.BoxOffice || "N/A"}</p>
+<p><b>Year:</b> ${m.Year}</p>
+<p><b>Genre:</b> ${m.Genre}</p>
+<p><b>Actors:</b> ${m.Actors}</p>
+<p><b>Director:</b> ${m.Director}</p>
 
 <h3>Plot</h3>
 <p>${m.Plot}</p>
@@ -131,11 +195,14 @@ modal.innerHTML=`
 });
 }
 
+function closeModal(){
+modal.style.display="none";
+}
+
 /* INIT */
 loadRow(trendingIDs,"trending");
 loadRow(popularIDs,"popular");
 loadRow(topIDs,"top");
-
 </script>
 
 </body>
