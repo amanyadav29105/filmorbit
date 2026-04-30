@@ -3,165 +3,139 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FilmOrbit - TMDB Only</title>
+<title>FilmOrbit - OMDb Enhanced</title>
 
 <style>
-/* (Same styles as your original — unchanged for brevity) */
-body{font-family:sans-serif;background:#141414;color:#fff;margin:0}
+body{margin:0;font-family:sans-serif;background:#141414;color:#fff}
 .navbar{display:flex;gap:10px;padding:10px;background:#000}
-.home-btn{background:#e50914;color:#fff;border:none;padding:8px}
-.logo{flex:1;text-align:center;font-weight:bold}
-.search-box input{width:100%;padding:8px}
-.results{display:flex;overflow-x:auto;gap:10px;padding:10px}
+.logo{flex:1;text-align:center;color:#e50914;font-weight:bold}
+input{padding:8px;width:100%}
+h2{padding:10px}
+.row{display:flex;overflow-x:auto;gap:10px;padding:10px}
 .movie{width:140px;cursor:pointer}
 .movie img{width:100%;height:200px;object-fit:cover}
 #modal{position:fixed;top:0;left:0;width:100%;height:100%;background:#000;display:none;overflow:auto;padding:20px}
+button{background:#e50914;color:#fff;border:none;padding:8px;cursor:pointer}
 </style>
 </head>
 
 <body>
 
 <div class="navbar">
-<button class="home-btn" onclick="goHome()">Home</button>
 <div class="logo">FilmOrbit</div>
-<div class="search-box">
-<input id="searchInput" placeholder="Search movies...">
-<div id="searchResults"></div>
-</div>
+<input id="search" placeholder="Search movies...">
 </div>
 
-<div id="banner"></div>
+<h2>🔥 Trending</h2>
+<div id="trending" class="row"></div>
 
-<h2>Trending</h2>
-<div id="trending" class="results"></div>
+<h2>⭐ Popular</h2>
+<div id="popular" class="row"></div>
 
-<h2>Popular</h2>
-<div id="popular" class="results"></div>
+<h2>🏆 Top Rated</h2>
+<div id="top" class="row"></div>
 
-<h2>Top Rated</h2>
-<div id="toprated" class="results"></div>
+<h2>🔎 Search Results</h2>
+<div id="results" class="row"></div>
 
 <div id="modal"></div>
 
 <script>
-const TMDB_KEY = "466f6ec156d5fdcd6a7345d4ae483add";
-const BASE = "https://api.themoviedb.org/3";
-const IMG = "https://image.tmdb.org/t/p/w500";
+const API="https://www.omdbapi.com/?apikey=72bd5552";
 
-let trendingMovies = [];
-let bannerIndex = 0;
+const modal=document.getElementById("modal");
 
-const modal = document.getElementById("modal");
+/* CURATED LISTS (IMDb IDs) */
+const trendingIDs=[
+"tt15398776","tt9362722","tt1745960","tt0816692","tt0468569"
+];
 
-/* HOME */
-function goHome(){
-    modal.style.display="none";
-    modal.innerHTML="";
+const popularIDs=[
+"tt4154796","tt0848228","tt1375666","tt0133093","tt0109830"
+];
+
+const topIDs=[
+"tt0111161","tt0068646","tt0071562","tt0468569","tt0050083"
+];
+
+/* LOAD ROW */
+function loadRow(ids,container){
+const el=document.getElementById(container);
+ids.forEach(id=>{
+fetch(API+"&i="+id)
+.then(r=>r.json())
+.then(m=>{
+const div=document.createElement("div");
+div.className="movie";
+div.innerHTML=`
+<img src="${m.Poster}">
+<p>${m.Title}</p>`;
+div.onclick=()=>showDetails(id);
+el.appendChild(div);
+});
+});
 }
 
-/* DISPLAY MOVIES */
-function displayMovies(movies,id){
-    const el=document.getElementById(id);
-    el.innerHTML="";
-    movies.forEach(m=>{
-        const div=document.createElement("div");
-        div.className="movie";
-        div.innerHTML=`
-        <img src="${m.poster_path?IMG+m.poster_path:''}">
-        <p>${m.title}</p>`;
-        div.onclick=()=>fetchDetails(m.id);
-        el.appendChild(div);
-    });
-}
+/* SEARCH */
+document.getElementById("search").addEventListener("input",e=>{
+const q=e.target.value.trim();
+if(q.length<2)return;
 
-/* BANNER */
-function startBanner(){
-    const banner=document.getElementById("banner");
-    setInterval(()=>{
-        const m=trendingMovies[bannerIndex];
-        banner.style.background=`url(${IMG+m.backdrop_path}) center/cover`;
-        banner.innerHTML=`<h1>${m.title}</h1>`;
-        banner.onclick=()=>fetchDetails(m.id);
-        bannerIndex=(bannerIndex+1)%trendingMovies.length;
-    },4000);
+fetch(API+"&s="+q)
+.then(r=>r.json())
+.then(d=>{
+const res=document.getElementById("results");
+res.innerHTML="";
+if(d.Search){
+d.Search.forEach(m=>{
+const div=document.createElement("div");
+div.className="movie";
+div.innerHTML=`
+<img src="${m.Poster}">
+<p>${m.Title}</p>`;
+div.onclick=()=>showDetails(m.imdbID);
+res.appendChild(div);
+});
 }
+});
+});
 
-/* DETAILS (TMDB ONLY) */
-function fetchDetails(id){
+/* DETAILS */
+function showDetails(id){
 modal.style.display="block";
 modal.innerHTML="Loading...";
 
-Promise.all([
-fetch(`${BASE}/movie/${id}?api_key=${TMDB_KEY}`).then(r=>r.json()),
-fetch(`${BASE}/movie/${id}/videos?api_key=${TMDB_KEY}`).then(r=>r.json()),
-fetch(`${BASE}/movie/${id}/credits?api_key=${TMDB_KEY}`).then(r=>r.json()),
-fetch(`${BASE}/movie/${id}/similar?api_key=${TMDB_KEY}`).then(r=>r.json())
-])
-.then(([movie,videos,credits,similar])=>{
-
-const rating=movie.vote_average?.toFixed(1)||"N/A";
-const votes=movie.vote_count||"N/A";
-const popularity=movie.popularity?.toFixed(0)||"N/A";
-
-const trailer=videos.results.find(v=>v.type==="Trailer");
-
-const castHTML=credits.cast.slice(0,10).map(c=>`
-<div>
-<img src="${c.profile_path?IMG+c.profile_path:''}" width="80">
-<p>${c.name}</p>
-</div>`).join("");
-
-const similarHTML=similar.results.slice(0,10).map(s=>`
-<div onclick="fetchDetails(${s.id})">
-<img src="${s.poster_path?IMG+s.poster_path:''}" width="100">
-<p>${s.title}</p>
-</div>`).join("");
+fetch(API+"&i="+id)
+.then(r=>r.json())
+.then(m=>{
 
 modal.innerHTML=`
-<h1>${movie.title}</h1>
-<button onclick="goHome()">Close</button>
+<h1>${m.Title}</h1>
+<button onclick="modal.style.display='none'">Close</button>
 
-<img src="${IMG+movie.poster_path}" width="200">
+<img src="${m.Poster}" width="200">
 
-<p><b>⭐ Rating:</b> ${rating}/10</p>
-<p><b>🗳 Votes:</b> ${votes}</p>
-<p><b>🔥 Popularity:</b> ${popularity}</p>
-<p><b>📅 Release:</b> ${movie.release_date}</p>
+<p><b>⭐ IMDb:</b> ${m.imdbRating}</p>
+<p><b>🍅 Rotten Tomatoes:</b> ${
+(m.Ratings.find(r=>r.Source==="Rotten Tomatoes")||{}).Value || "N/A"
+}</p>
 
-${trailer?`<button onclick="window.open('https://youtube.com/watch?v=${trailer.key}')">Watch Trailer</button>`:''}
+<p><b>📅 Year:</b> ${m.Year}</p>
+<p><b>🎬 Genre:</b> ${m.Genre}</p>
+<p><b>🎭 Actors:</b> ${m.Actors}</p>
+<p><b>🎥 Director:</b> ${m.Director}</p>
 
-<h3>Overview</h3>
-<p>${movie.overview}</p>
-
-<h3>Cast</h3>
-<div style="display:flex;gap:10px;overflow:auto">${castHTML}</div>
-
-<h3>Similar</h3>
-<div style="display:flex;gap:10px;overflow:auto">${similarHTML}</div>
+<h3>Plot</h3>
+<p>${m.Plot}</p>
 `;
 });
 }
 
-/* LOAD DATA */
-function load(){
-fetch(`${BASE}/trending/movie/week?api_key=${TMDB_KEY}`)
-.then(r=>r.json())
-.then(d=>{
-trendingMovies=d.results;
-displayMovies(d.results,"trending");
-startBanner();
-});
+/* INIT */
+loadRow(trendingIDs,"trending");
+loadRow(popularIDs,"popular");
+loadRow(topIDs,"top");
 
-fetch(`${BASE}/movie/popular?api_key=${TMDB_KEY}`)
-.then(r=>r.json())
-.then(d=>displayMovies(d.results,"popular"));
-
-fetch(`${BASE}/movie/top_rated?api_key=${TMDB_KEY}`)
-.then(r=>r.json())
-.then(d=>displayMovies(d.results,"toprated"));
-}
-
-load();
 </script>
 
 </body>
